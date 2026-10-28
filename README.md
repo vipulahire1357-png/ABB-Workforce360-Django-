@@ -1,20 +1,60 @@
 # ABB Workforce360
 
-ABB Workforce360 manages worker identity registration, visitor passes, gate entry and exit, canteen meal scans, administrator access, and two-sided CR80 identity cards for ABB Plant 3.
+ABB Workforce360 is a local workforce operations application for ABB Plant 3. It manages worker records, visitor passes, gate entry and exit, canteen scans, and identity-card PDFs.
 
-The local application is served by Django templates and static HTML/CSS with small browser-native JavaScript helpers. The existing SQLAlchemy domain services and SQLite schema remain in place behind Django so existing records, identifiers, scan history, and card rules can be reused without a lossy database conversion. Docker, production deployment, and multi-laptop networking are intentionally not implemented.
+## System diagrams
 
-## Prerequisites
+The editable PowerPoint contains a component architecture diagram and a UML domain model. The PNG previews below are exported from those slides.
+
+[Download the editable UML PowerPoint](docs/diagrams/Workforce360-UML.pptx)
+
+### Application architecture
+
+![ABB Workforce360 application architecture](docs/diagrams/workforce360-architecture.png)
+
+### Domain model
+
+![ABB Workforce360 UML domain model](docs/diagrams/workforce360-domain-model.png)
+
+## Features
+
+- Register and manage workers, including status changes and photo uploads.
+- Register visitors and issue passes that expire at the end of the registration day in the configured site timezone.
+- Record accepted and rejected gate scans. Accepted scans follow the daily entry and exit rules implemented by the gate service.
+- Record canteen scans for eligible workers and visitors. The service permits one successful meal scan per person per business day and requires an accepted gate entry that day.
+- View dashboard counts and filter gate and canteen transaction reports by date and result.
+- Generate worker and visitor identity-card PDFs.
+- Apply operator roles: `ADMIN`, `GATE`, and `CANTEEN`.
+
+## Architecture
+
+The browser UI uses Django templates, CSS, and browser-native JavaScript. Django handles HTTP routes, sessions, CSRF protection, and role checks. The existing SQLAlchemy models and domain services continue to use the existing SQLite tables for workforce data. Uploaded photos and other file assets live outside the database.
+
+This project runs locally with Django's development server. It is configured to bind to loopback and is not a production deployment.
+
+### Main directories
+
+| Path | Purpose |
+| --- | --- |
+| `workforce360/` | Django settings, URL configuration, and WSGI entry point |
+| `webapp/` | Django views and forms, templates, static assets, and local `runserver` command |
+| `backend/models.py`, `backend/db.py` | SQLAlchemy schema and SQLite setup |
+| `backend/services/` | Gate, canteen, identity, visitor, photo, timezone, and card logic |
+| `assets/` | Source assets used by card generation |
+| `data/` | Local database and uploaded photos; ignored by Git |
+| `tests/` | Django adapter and domain-rule tests |
+| `docs/diagrams/` | Editable UML PowerPoint and README preview images |
+
+## Requirements
 
 - Python 3.11 or newer
 - Git
-- PowerShell on Windows, or a shell with Python virtual environment support
+- PowerShell on Windows, or a POSIX-compatible shell
+- No Node.js or frontend package manager is needed to run the application
 
-Node.js, npm, React, TypeScript, and Vite are not required to run or test the application.
+## Local setup
 
-## Set up locally
-
-From the repository root in PowerShell:
+### Windows PowerShell
 
 ```powershell
 Copy-Item .env.example .env
@@ -24,88 +64,119 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-On macOS/Linux, activate with `source .venv/bin/activate` after creating the environment with `python3 -m venv .venv`.
+### macOS or Linux
 
-### Environment and existing data
+```sh
+cp .env.example .env
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-The app reads `WIR_*` values from `.env`. For a fresh installation, copy the template and set unique values for `WIR_SESSION_SECRET` and `WIR_WORKER_ID_SECRET` (each at least 32 random bytes). Django derives its session and CSRF signing from the session secret. Set `WIR_AADHAAR_ENCRYPTION_KEY` to a Fernet key before registering records that contain Aadhaar data. Generate one with:
+### Configure secrets and local paths
 
-```powershell
+Edit `.env` before starting. Set unique random values of at least 32 bytes for:
+
+- `WIR_SESSION_SECRET`
+- `WIR_WORKER_ID_SECRET`
+
+Keep the same `WIR_WORKER_ID_SECRET` for an existing database because generated worker IDs depend on it. Visitor IDs use `WIR_VISITOR_ID_SECRET` when configured; otherwise they use the worker ID secret.
+
+Set `WIR_AADHAAR_ENCRYPTION_KEY` to a Fernet key before registering records that contain Aadhaar data. Generate one with:
+
+```sh
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-For an existing installation, keep its `.env` and all existing key values. Do not regenerate the worker ID or Aadhaar encryption keys: saved identifiers and encrypted values depend on them. Never commit `.env` or share its contents.
+Keep the original encryption key for an existing database. Without a valid key, Aadhaar registration is unavailable.
 
-`WIR_DATABASE_URL` selects the SQLite database. The existing default is `data/wir.sqlite3`. `WIR_UPLOAD_DIR` selects worker photo storage and `WIR_VISITOR_UPLOAD_DIR` selects visitor photo storage. Paths may be relative to the repository root or absolute. Do not put the database or uploads in a temporary directory.
+The example configuration uses:
 
-The Django adapter continues to use the existing SQLite tables. It does not import records into a new Django schema or reset the database. Startup creates any missing legacy tables and runs only the existing additive SQLite compatibility updates. Django's own optional framework migrations add framework tables; they do not replace workforce tables.
+- `WIR_DATABASE_URL`: SQLite at `data/wir.sqlite3`
+- `WIR_UPLOAD_DIR`: worker photo storage
+- `WIR_VISITOR_UPLOAD_DIR`: visitor photo storage
+- `WIR_LOGO_PATH`: ABB logo used by generated cards
+- `WIR_SITE_TIMEZONE`: site timezone; defaults to `Asia/Kolkata`
+- `WIR_COOKIE_SECURE`: enable secure cookies when HTTPS is configured
 
-No workforce data migration is needed for this change. For Django framework tables only, run `python manage.py migrate`; it creates framework-owned tables and leaves the existing worker, visitor, admin, gate, canteen, and sequence tables intact. Do not use `flush`, delete the SQLite file, or run a database reset to set up the app. Normal local startup does not require this command because signed-cookie sessions are used.
+Paths can be relative to the repository root or absolute. Keep the database and uploads in persistent storage. Never commit `.env`, `secrets.md`, database files, or real photos.
 
-## Create an administrator
+### Create an operator account
 
-Existing installations keep their current administrator accounts. To create an additional account, run:
+For a new installation, create an administrator or role-specific operator:
 
-```powershell
+```sh
 python -m backend.create_admin
 ```
 
-The command asks for a username, role (`ADMIN`, `GATE`, or `CANTEEN`), and a password of at least 14 characters. Do not create a replacement admin as part of normal startup.
+The command prompts for a username, role (`ADMIN`, `GATE`, or `CANTEEN`), and a password of at least 14 characters. Existing installations should keep their existing accounts and secrets.
 
-## Start on localhost
+### Start the application
 
-```powershell
+```sh
 python manage.py runserver
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). The development command binds only to loopback. If port 8000 is occupied, pass a loopback port such as `python manage.py runserver 127.0.0.1:8010` and open `http://127.0.0.1:8010`. This is not a production server.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). To choose another local port:
 
-## Application workflows
+```sh
+python manage.py runserver 8010
+```
 
-- **Worker registration and management:** register a worker with a validated JPG photo, search the directory, update active status, and download a two-sided CR80 PDF identity card. Worker IDs and worker numbers use the existing generation rules.
-- **Gate operations:** scan or type a barcode into the gate input. USB barcode scanners that send keystrokes and Enter are supported. Server-side checks enforce worker/visitor status, daily state transitions, duplicate prevention, and the established 10-minute entry-to-exit interval. Accepted and rejected scans are audited.
-- **Visitor passes:** register a visitor, optionally capture or upload a JPG photo, review active/expired passes, and download the visitor PDF. Passes expire at 23:59:59 in the configured site timezone on the registration date.
-- **Canteen:** scan an eligible worker or visitor after an accepted gate entry. The server enforces one successful meal scan per person per business day and records rejected attempts.
-- **Dashboard and reports:** administrator counts come from the database; gate and canteen histories can be refreshed and filtered by date/result.
-- **Photographs:** the browser camera helper and file upload validate JPEG format, dimensions, and a 200 KB limit. Photos are saved in persistent configurable storage, not inside a temporary runtime folder.
+The custom command validates required secrets, initializes missing legacy tables, applies the existing additive SQLite compatibility updates, and binds the development server to loopback.
 
-Passwords are stored as Argon2 hashes. Aadhaar values are encrypted at rest and only the last four digits are returned in lists. State-changing requests use Django CSRF protection and authenticated role checks.
+## Role access
 
-## Database and file backups
+| Role | Main access |
+| --- | --- |
+| `ADMIN` | Dashboard, workers, visitors, gate operations and reports, canteen operations and reports |
+| `GATE` | Worker lookup, visitor management, gate operations and gate reports |
+| `CANTEEN` | Worker lookup, canteen operations and canteen reports |
 
-Stop the local app before copying the SQLite database and its upload folders. Keep the database and photos together. Preserve `.env` with the backup in a restricted location because its secrets are needed to retain existing IDs and encrypted fields. Never put real records, photos, or secrets in Git.
+State-changing requests use Django CSRF protection. Passwords are stored as Argon2 hashes. Aadhaar values are encrypted at rest when the encryption key is configured and are masked in list responses.
 
-The removed portable package used a separate database that contained no worker, visitor, gate, or canteen records or photos, but it did contain one separate administrator account. That account was not transferred to the primary database. Recreate it with `python -m backend.create_admin` if it was needed.
+## API overview
+
+All paths are relative to the local server root. Protected routes require an authenticated session and the listed role.
+
+| Route | Purpose | Roles |
+| --- | --- | --- |
+| `GET /api/health` | Database health check | Public |
+| `POST /api/auth/login` | Start an operator session | Public |
+| `GET /api/auth/me`, `POST /api/auth/logout` | Read or end the session | Signed-in |
+| `GET /api/summary` | Worker counts | All roles |
+| `GET/POST /api/workers` | Search/list or register workers | All roles |
+| `GET /api/workers/search`, `GET /api/workers/{id}` | Worker lookup and details | All roles |
+| `PATCH /api/workers/{id}/status` | Update worker status | All roles |
+| `GET /api/workers/{id}/photo`, `GET /api/workers/{id}/id-card` | Worker photo or PDF card | All roles |
+| `POST /api/gate/scan`, `GET /api/gate/transactions`, `GET /api/gate/report` | Gate scans and reports | `ADMIN`, `GATE` |
+| `GET/POST /api/visitors`, `GET /api/visitors/{id}` | Visitor registration and lookup | `ADMIN`, `GATE` |
+| `GET /api/visitors/{id}/photo`, `GET /api/visitors/{id}/id-card` | Visitor photo or PDF pass | `ADMIN`, `GATE` |
+| `POST /api/canteen/scan`, `GET /api/canteen/transactions`, `GET /api/canteen/report` | Canteen scans and reports | `ADMIN`, `CANTEEN` |
 
 ## Tests and checks
 
-```powershell
+Install the test dependencies when needed:
+
+```sh
 python -m pip install -r requirements-test.txt
+```
+
+Run the Django checks and test suites:
+
+```sh
 python manage.py check
 python manage.py test tests.test_django_web --verbosity 2
 python -m pytest -q --basetemp=.pytest-work
 ```
 
-Tests use isolated in-memory databases or test fixtures; they do not run against the live workforce database.
+Tests use isolated databases and temporary files. They should not use the local workforce database.
 
-## Project structure
+## Data and backups
 
-- `workforce360/` — Django settings, URLs, and WSGI entry point
-- `webapp/` — Django views, server-rendered templates, static CSS/JavaScript, and local runserver validation
-- `backend/services/` — retained identity, photo, visitor, gate, canteen, timezone, and PDF business logic
-- `backend/models.py`, `backend/db.py` — retained SQLAlchemy definitions for the existing SQLite schema
-- `data/` — ignored local SQLite database, uploads, and runtime state
-- `tests/` — Django adapter tests and existing business-rule regression tests
+The default database is `data/wir.sqlite3`; uploaded worker and visitor photos are stored under `data/uploads/`. Stop the application before copying the SQLite database and photo folders. Back up `.env` securely alongside the data because its secrets are required to preserve existing worker IDs and decrypt stored Aadhaar values. Do not reset or delete the existing database as a setup step.
 
-## Legacy components retired
+## Known limits
 
-The React/Vite frontend, npm manifests, Windows portable package, portable build workflow, and laptop/LAN launcher path have been removed. The application starts with Django and a Python environment only. No Docker or deployment configuration is part of this project phase.
-
-## Troubleshooting
-
-- **Startup reports invalid secrets:** restore the existing `.env` values or configure the required secrets before starting.
-- **Aadhaar registration is unavailable:** set a valid Fernet value in `WIR_AADHAAR_ENCRYPTION_KEY`; for existing data, use the original value.
-- **Photo rejected:** choose a JPEG smaller than or equal to 200 KB with supported dimensions.
-- **A stored photo is missing:** confirm the configured upload path and restore the photo backup; the database record is not deleted when a file is missing.
-- **Identity card cannot be generated:** confirm the ABB logo asset and referenced worker/visitor photo exist.
-- **Port 8000 is occupied:** choose an unused loopback port, for example `python manage.py runserver 127.0.0.1:8010`. The application does not discover or expose a laptop on the LAN.
+The repository is configured for local development: Django `DEBUG` is enabled, allowed hosts are loopback, and the custom server command rejects non-local bind addresses. No production deployment, Docker setup, or LAN hosting is provided.

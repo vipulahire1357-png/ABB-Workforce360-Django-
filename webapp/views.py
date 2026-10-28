@@ -83,21 +83,39 @@ def serialize_worker(worker):
     }
 
 
-def serialize_gate(row):
+def serialize_gate(row, name=None, photo_url=None):
     return {"id": row.id, "event_date": row.event_date.isoformat(),
             "scan_timestamp": row.scan_timestamp.isoformat() if row.scan_timestamp else None,
             "person_id": row.person_id, "person_type": row.person_type,
             "event_type": row.event_type, "barcode_scanned": row.barcode_scanned,
             "validation_result": row.validation_result, "rejection_reason": row.rejection_reason,
-            "operator_id": row.operator_id}
+            "operator_id": row.operator_id, "name": name, "photo_url": photo_url}
 
 
-def serialize_canteen(row):
+def serialize_canteen(row, name=None, photo_url=None):
     return {"id": row.id, "person_id": row.worker_id, "worker_id": row.worker_id,
             "person_type": row.person_type, "business_date": row.business_date.isoformat(),
             "scan_timestamp": row.scan_timestamp.isoformat() if row.scan_timestamp else None,
             "gate_entry_id": row.gate_entry_id, "operator_id": row.operator_id,
-            "scan_result": row.scan_result, "rejection_reason": row.rejection_reason}
+            "scan_result": row.scan_result, "rejection_reason": row.rejection_reason,
+            "name": name, "photo_url": photo_url}
+
+
+def _resolve_person_details(db, rows_with_person_id, id_attr="person_id"):
+    """Look up name and photo_url for a list of transaction rows."""
+    ids = {getattr(r, id_attr) for r in rows_with_person_id}
+    person_map = {}
+    if ids:
+        workers = db.scalars(select(Worker).where(Worker.worker_id.in_(ids))).all()
+        for w in workers:
+            person_map[w.worker_id] = (w.name, f"/api/workers/{w.worker_id}/photo")
+        visitor_ids = ids - set(person_map.keys())
+        if visitor_ids:
+            visitors_found = db.scalars(select(Visitor).where(Visitor.visitor_id.in_(visitor_ids))).all()
+            for v in visitors_found:
+                photo = f"/api/visitors/{v.visitor_id}/photo" if v.photo_path else None
+                person_map[v.visitor_id] = (v.name, photo)
+    return person_map
 
 
 def valid_photo(upload, required=False):
@@ -367,7 +385,9 @@ def gate_history(request):
             stmt = stmt.where(GateTransaction.validation_result == request.GET["result"].upper())
         total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = db.scalars(stmt.order_by(GateTransaction.scan_timestamp.desc()).offset((page - 1) * size).limit(size)).all()
-        return JsonResponse({"items": [serialize_gate(r) for r in rows], "page": page, "page_size": size, "total": total})
+        pmap = _resolve_person_details(db, rows, "person_id")
+        items = [serialize_gate(r, *pmap.get(r.person_id, (None, None))) for r in rows]
+        return JsonResponse({"items": items, "page": page, "page_size": size, "total": total})
     except ValueError:
         return api_error("Invalid filter", 422)
     finally:
@@ -382,9 +402,22 @@ def gate_report(request):
         target = date.fromisoformat(request.GET["report_date"]) if request.GET.get("report_date") else today_local()
         rows = list(db.scalars(select(GateTransaction).where(GateTransaction.event_date == target).order_by(GateTransaction.scan_timestamp.asc())))
         accepted = [row for row in rows if row.validation_result == "ACCEPTED"]
+        latest_worker_events = {}
+        worker_events = db.execute(
+            select(GateTransaction.person_id, GateTransaction.event_type)
+            .where(
+                GateTransaction.person_type == "WORKER",
+                GateTransaction.validation_result == "ACCEPTED",
+                GateTransaction.event_type.in_(("ENTRY", "EXIT")),
+            )
+            .order_by(GateTransaction.scan_timestamp.desc(), GateTransaction.id.desc())
+        )
+        for person_id, event_type in worker_events:
+            latest_worker_events.setdefault(person_id, event_type)
         return JsonResponse({"date": target.isoformat(), "total_transactions": len(rows),
             "accepted_entries": sum(row.event_type == "ENTRY" for row in accepted),
             "accepted_exits": sum(row.event_type == "EXIT" for row in accepted),
+            "estimated_workers_inside": sum(event_type == "ENTRY" for event_type in latest_worker_events.values()),
             "rejected": sum(row.validation_result == "REJECTED" for row in rows),
             "unique_persons": len({row.person_id for row in accepted}),
             "transactions": [serialize_gate(row) for row in rows]})
@@ -525,7 +558,9 @@ def canteen_history(request):
             stmt = stmt.where(CanteenTransaction.scan_result == request.GET["result"].upper())
         total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = db.scalars(stmt.order_by(CanteenTransaction.scan_timestamp.desc()).offset((page - 1) * size).limit(size)).all()
-        return JsonResponse({"items": [serialize_canteen(r) for r in rows], "page": page, "page_size": size, "total": total})
+        pmap = _resolve_person_details(db, rows, "worker_id")
+        items = [serialize_canteen(r, *pmap.get(r.worker_id, (None, None))) for r in rows]
+        return JsonResponse({"items": items, "page": page, "page_size": size, "total": total})
     except ValueError:
         return api_error("Invalid filter", 422)
     finally:

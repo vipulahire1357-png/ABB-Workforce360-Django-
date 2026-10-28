@@ -1,3 +1,58 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · ABB Workforce360</title><link rel="icon" href="{% static 'webapp/abb-logo.svg' %}" type="image/svg+xml"><link rel="stylesheet" href="{% static 'webapp/app.css' %}"></head>
-<body class="login-wrap"><form class="login" id="login-form"><img src="{% static 'webapp/abb-logo.svg' %}" alt="ABB"><h1>ABB Workforce360</h1><p>Sign in with your authorized portal credentials.</p><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"><label>Username<input name="username" required autocomplete="username" maxlength="80"></label><label>Password<input type="password" name="password" required autocomplete="current-password"></label><div id="login-error" class="error" role="alert"></div><button class="primary full" type="submit">Sign in</button><small>Access is restricted to provisioned ABB Workforce360 operators.</small></form><script src="{% static 'webapp/app.js' %}" defer></script></body></html>
+<html lang="en" data-theme="">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · ABB Workforce360</title>
+  <meta name="description" content="Sign in to ABB Workforce360 Plant 3 workforce management portal.">
+  <link rel="icon" href="{% static 'webapp/abb-logo.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'webapp/app.css' %}">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('wf-theme')||''}catch(e){}</script>
+</head>
+<body class="login-page">
+
+  <!-- Theme toggle -->
+  <button class="btn-icon login-theme-toggle" type="button" id="login-theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+    <svg class="icon-sun" viewBox="0 0 20 20" fill="currentColor" width="18" height="18">
+      <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/>
+    </svg>
+    <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor" width="18" height="18" style="display:none">
+      <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
+    </svg>
+  </button>
+
+  <form class="login-card" id="login-form">
+    <div class="login-logo">
+      <img src="{% static 'webapp/abb-logo.svg' %}" alt="ABB" width="64" height="34">
+      <h1 class="login-title">Workforce360</h1>
+    </div>
+
+    <p class="login-subtitle">Sign in with your authorized portal credentials.</p>
+
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+    <div class="form-group">
+      <label class="form-label" for="login-username">Username</label>
+      <input class="form-input" id="login-username" name="username" required autocomplete="username" maxlength="80" placeholder="Enter your username">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="login-password">Password</label>
+      <input class="form-input" id="login-password" type="password" name="password" required autocomplete="current-password" placeholder="Enter your password">
+    </div>
+
+    <div class="login-error" id="login-error" role="alert">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <span></span>
+    </div>
+
+    <button class="btn btn-primary btn-full" type="submit" id="login-submit">
+      Sign in
+    </button>
+
+    <p class="login-footer">Access is restricted to provisioned ABB Workforce360 operators.</p>
+  </form>
+
+  <script src="{% static 'webapp/app.js' %}" defer></script>
+</body>
+</html>

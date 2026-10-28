@@ -1,18 +1,537 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf_token }}"><title>ABB Workforce360</title><link rel="icon" href="{% static 'webapp/abb-logo.svg' %}" type="image/svg+xml"><link rel="stylesheet" href="{% static 'webapp/app.css' %}"></head>
-<body><div class="shell"><aside class="nav"><img src="{% static 'webapp/abb-logo.svg' %}" class="logo" alt="ABB"><div class="brand">ABB Workforce360<span>Plant 3 Access &amp; Services</span></div><div class="role-chip">{{ operator.role|title }}</div>
-<div class="navlabel">OPERATIONS</div>
-{% if operator.role == 'ADMIN' %}<button class="navitem" data-page="dashboard">Dashboard</button><button class="navitem" data-page="workers">Worker Management</button><button class="navitem" data-page="worker-register">Worker Registration</button>{% endif %}
-{% if operator.role == 'ADMIN' or operator.role == 'GATE' %}<button class="navitem" data-page="gate">Gate Management</button><button class="navitem" data-page="visitors">Visitor Registration</button><button class="navitem" data-page="gate-history">Gate Transactions</button>{% endif %}
-{% if operator.role == 'ADMIN' or operator.role == 'CANTEEN' %}<button class="navitem" data-page="canteen">Canteen Scanner</button><button class="navitem" data-page="canteen-history">Canteen Reports</button>{% endif %}
-<div class="navbottom"><div class="navuser"><b>{{ operator.username }}</b><small>{{ operator.role }}</small></div><button id="logout" title="Sign out">Sign out</button></div></aside>
-<main class="main"><div id="notice" class="toast" hidden role="status"></div>
-<section class="page" id="page-dashboard"><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · OVERVIEW</div><h1>Operations Dashboard</h1><p>Current workforce and daily service activity.</p></div><button class="secondary" data-refresh="dashboard">Refresh</button></header><div class="stats stats-3"><div><span>Total Workers</span><b id="dash-total">—</b></div><div><span>Active Workers</span><b id="dash-active">—</b></div><div><span>Inactive Workers</span><b id="dash-inactive">—</b></div></div><section class="panel pad"><h2>Daily activity</h2><div id="daily-summary" class="stats stats-3"></div></section></section>
-<section class="page" id="page-workers" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · WORKFORCE RECORDS</div><h1>Worker Management</h1><p>Search worker records, update status and issue identity cards.</p></div><button class="primary" data-page="worker-register">Register Worker</button></header><div class="stats stats-3"><div><span>Total Workers</span><b id="worker-total">—</b></div><div><span>Active</span><b id="worker-active">—</b></div><div><span>Inactive</span><b id="worker-inactive">—</b></div></div><section class="panel"><div class="filters"><label class="searchbox">⌕ <input id="worker-search" placeholder="Search worker name"></label><button class="secondary" data-refresh="workers">Refresh</button></div><div class="tablewrap"><table><thead><tr><th>Photo</th><th>Worker ID</th><th>Worker No.</th><th>Name</th><th>Contractor</th><th>Joining date</th><th>Contact</th><th>Emergency contact</th><th>Aadhaar</th><th>Status</th><th>Actions</th></tr></thead><tbody id="worker-rows"></tbody></table></div><div class="pagination" id="worker-page"></div></section></section>
-<section class="page" id="page-worker-register" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · WORKFORCE RECORDS</div><h1>Worker Registration</h1><p>Register a worker and create their secure identity card.</p></div></header><form class="panel formpanel" id="worker-form" enctype="multipart/form-data"><div class="formsection"><h2>Worker Details</h2><div class="grid"><label>Full name <em>*</em><input name="name" required maxlength="120"></label><label>Contractor <em>*</em><input name="contractor_name" required maxlength="120"></label><label>Joining date <em>*</em><input type="date" name="joining_date" required></label><label>Contact number <em>*</em><input name="contact_no" type="tel" required></label><label>Emergency contact <em>*</em><input name="emergency_contact" type="tel" required></label><label>Aadhaar number <em>*</em><input name="aadhaar_no" inputmode="numeric" maxlength="14" required><small>Encrypted in the existing database; only the last 4 digits are shown.</small></label></div></div><div class="formsection"><h2>Worker Photo</h2><p>JPG/JPEG, up to 200 KB. Camera capture is available on supported devices.</p><div class="uploadrow"><input name="photo" type="file" accept="image/jpeg" capture="environment" required><button type="button" class="secondary" data-camera="worker-form">Take photo</button><span>Photo required</span></div></div><div class="formfooter"><span>Worker ID is generated from the existing secure identifier rule.</span><button class="primary">Register Worker</button></div></form></section>
-<section class="page" id="page-gate" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · GATE MANAGEMENT</div><h1>Gate Entry &amp; Exit</h1><p>Scan or enter a worker or visitor identity code.</p></div></header><form class="panel scanpanel" id="gate-form"><label>Barcode / identity ID<input name="barcode" required maxlength="120" autocomplete="off" autofocus></label><button class="primary">Process Scan</button></form><div id="gate-result" class="panel resultbox" aria-live="polite">Scan result appears here.</div><div class="panel pad"><h2>Today's recent transactions</h2><button class="secondary" data-refresh="gate-history">Refresh history</button><div class="tablewrap"><table><thead><tr><th>Time</th><th>Person ID</th><th>Type</th><th>Event</th><th>Result</th><th>Reason</th></tr></thead><tbody id="gate-recent"></tbody></table></div></div></section>
-<section class="page" id="page-visitors" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · VISITOR MANAGEMENT</div><h1>Visitor Registration &amp; Passes</h1><p>Issue temporary daily visitor credentials and manage guest records.</p></div></header><form class="panel formpanel" id="visitor-form" enctype="multipart/form-data"><div class="formsection"><h2>Visitor Details</h2><div class="grid"><label>Full name <em>*</em><input name="name" required maxlength="120"></label><label>Company <em>*</em><input name="company_name" required maxlength="120"></label><label>Location / City <em>*</em><input name="location" required maxlength="120"></label><label>ABB Host <em>*</em><input name="host" required maxlength="120"></label><label>Purpose <em>*</em><input name="purpose" required maxlength="255"></label><label>Contact number <em>*</em><input name="contact_no" type="tel" required></label><label>Aadhaar number <em>*</em><input name="aadhaar_no" inputmode="numeric" maxlength="14" required><small>Encrypted in the existing database.</small></label></div></div><div class="formsection"><h2>Visitor Photo (Optional)</h2><div class="uploadrow"><input name="photo" type="file" accept="image/jpeg" capture="environment"><button type="button" class="secondary" data-camera="visitor-form">Take photo</button><span>Optional JPG/JPEG, up to 200 KB</span></div></div><div class="formfooter"><span>Pass automatically expires at 23:59:59 on registration date.</span><button class="primary">Issue Visitor Pass</button></div></form><section class="panel pad"><div class="filters"><label class="searchbox">⌕ <input id="visitor-search" placeholder="Search visitor name"></label><select id="visitor-status"><option value="">All statuses</option><option>Active</option><option>Inactive</option></select><button class="secondary" data-refresh="visitors">Refresh</button></div><div id="visitor-counts" class="stats stats-3"></div><div class="tablewrap"><table><thead><tr><th>Photo</th><th>Visitor ID</th><th>Pass No.</th><th>Name</th><th>Company</th><th>Location</th><th>Host</th><th>Purpose</th><th>Contact</th><th>Aadhaar</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead><tbody id="visitor-rows"></tbody></table></div><div class="pagination" id="visitor-page"></div></section></section>
-<section class="page" id="page-gate-history" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · GATE AUDIT</div><h1>Gate Transactions</h1><p>Accepted and rejected gate operations.</p></div><button class="secondary" data-refresh="gate-history">Refresh</button></header><section class="panel"><div class="filters"><label>Date <input type="date" id="gate-date"></label><select id="gate-result"><option value="">All results</option><option value="ACCEPTED">Accepted</option><option value="REJECTED">Rejected</option></select></div><div class="tablewrap"><table><thead><tr><th>Time</th><th>Person ID</th><th>Type</th><th>Event</th><th>Scanned code</th><th>Result</th><th>Reason</th></tr></thead><tbody id="gate-history-rows"></tbody></table></div></section></section>
-<section class="page" id="page-canteen" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · CANTEEN</div><h1>Canteen Meal Scanner</h1><p>Eligible workers and visitors with an accepted gate entry may scan once per business day.</p></div></header><form class="panel scanpanel" id="canteen-form"><label>Barcode / identity ID<input name="barcode" required maxlength="120" autocomplete="off"></label><button class="primary">Process Meal Scan</button></form><div id="canteen-result" class="panel resultbox" aria-live="polite">Scan result appears here.</div><section class="panel pad"><h2>Today's recent scans</h2><button class="secondary" data-refresh="canteen-history">Refresh history</button><div class="tablewrap"><table><thead><tr><th>Time</th><th>Person ID</th><th>Type</th><th>Result</th><th>Reason</th></tr></thead><tbody id="canteen-recent"></tbody></table></div></section></section>
-<section class="page" id="page-canteen-history" hidden><header class="pagehead"><div><div class="eyebrow">ABB PLANT 3 · CANTEEN REPORTS</div><h1>Canteen Transactions</h1><p>Daily scan totals and eligibility audit.</p></div><button class="secondary" data-refresh="canteen-history">Refresh</button></header><section class="panel"><div class="filters"><label>Date <input type="date" id="canteen-date"></label></div><div id="canteen-counts" class="stats stats-3"></div><div class="tablewrap"><table><thead><tr><th>Time</th><th>Person ID</th><th>Type</th><th>Gate entry</th><th>Result</th><th>Reason</th></tr></thead><tbody id="canteen-history-rows"></tbody></table></div></section></section>
-<footer class="footer">ABB Workforce360 <span>·</span> Plant 3 Operations &amp; Services</footer></main></div><dialog id="camera-dialog"><form method="dialog"><button class="secondary camera-close">Close camera</button></form><video autoplay playsinline></video><button id="capture-photo" class="primary">Capture photo</button></dialog><script src="{% static 'webapp/app.js' %}" defer></script></body></html>
+<html lang="en" data-theme="">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>ABB Workforce360</title>
+  <meta name="description" content="ABB Workforce360 Plant 3 workforce management, gate operations, and canteen services.">
+  <link rel="icon" href="{% static 'webapp/abb-logo.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% static 'webapp/app.css' %}">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('wf-theme')||''}catch(e){}</script>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ===== Sidebar Overlay (mobile) ===== -->
+  <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <img src="{% static 'webapp/abb-logo.svg' %}" alt="ABB" width="56" height="30">
+      <div class="sidebar-brand">
+        Workforce360
+        <small>Plant 3 · Operations</small>
+      </div>
+    </div>
+
+    <div class="role-chip">
+      <svg viewBox="0 0 16 16" fill="currentColor" width="12" height="12"><path d="M8 1a3.5 3.5 0 100 7 3.5 3.5 0 000-7zM2 13.5C2 10.5 4.7 9 8 9s6 1.5 6 4.5V15H2v-1.5z"/></svg>
+      {{ operator.role }}
+    </div>
+
+    <div class="nav-label">Operations</div>
+
+    {% if operator.role == 'ADMIN' %}
+    <button class="navitem" data-page="dashboard">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 6a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zm10 0a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+      <span class="nav-text">Dashboard</span>
+    </button>
+    <button class="navitem" data-page="workers">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zm8 0a3 3 0 11-6 0 3 3 0 016 0zm-4.07 11c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z"/></svg>
+      <span class="nav-text">Worker Management</span>
+    </button>
+    {% endif %}
+
+    {% if operator.role == 'ADMIN' or operator.role == 'GATE' %}
+    <button class="navitem" data-page="gate">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5C17.944 5.654 18 6.323 18 7c0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.677.056-1.346.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+      <span class="nav-text">Gate Management</span>
+    </button>
+    <button class="navitem" data-page="visitors">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 2a1 1 0 00-1 1v1.323l-3.954 1.582-.816-.814a1 1 0 00-1.414 1.414l.707.707A1 1 0 003.83 7.92L4 8.06V14a2 2 0 002 2h8a2 2 0 002-2V8.06l.17-.14a1 1 0 00.307-.708l.707-.707a1 1 0 00-1.414-1.414l-.816.814L11 4.323V3a1 1 0 00-1-1zM7 8a1 1 0 012 0v2a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v2a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      <span class="nav-text">Visitor Management</span>
+    </button>
+    <button class="navitem" data-page="gate-history">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>
+      <span class="nav-text">Gate Transactions</span>
+    </button>
+    {% endif %}
+
+    {% if operator.role == 'ADMIN' or operator.role == 'CANTEEN' %}
+    <button class="navitem" data-page="canteen">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zm-2 4a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"/></svg>
+      <span class="nav-text">Canteen Scanner</span>
+    </button>
+    <button class="navitem" data-page="canteen-history">
+      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zm6-4a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zm6-3a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"/></svg>
+      <span class="nav-text">Canteen Reports</span>
+    </button>
+    {% endif %}
+
+    <div class="nav-bottom">
+      <div class="nav-user">
+        <div class="nav-avatar">{{ operator.username|make_list|first|upper }}</div>
+        <div class="nav-user-info">
+          <b>{{ operator.username }}</b>
+          <small>{{ operator.role }}</small>
+        </div>
+      </div>
+      <button class="btn-logout" id="logout" title="Sign out">
+        <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"/></svg>
+        <span class="nav-text">Sign out</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===== Main Content ===== -->
+  <div class="main-wrap">
+
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <button class="mobile-toggle" id="mobile-toggle" title="Open menu" aria-label="Open navigation menu">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/></svg>
+        </button>
+        <span class="header-breadcrumb" id="header-breadcrumb">ABB Plant 3 · Overview</span>
+      </div>
+      <div class="header-right">
+        <button class="btn-icon" id="theme-toggle" title="Toggle dark mode" aria-label="Toggle dark mode">
+          <svg class="icon-sun" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"/></svg>
+          <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor" style="display:none"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Toast notification -->
+    <div id="notice" class="toast" hidden role="status"></div>
+
+    <!-- ===== Content ===== -->
+    <div class="content">
+
+      <!-- =========== DASHBOARD =========== -->
+      <section class="page" id="page-dashboard">
+        <div class="dashboard-welcome">
+          <div class="dashboard-welcome-copy">
+            <div class="eyebrow">ABB Plant 3 · Operations</div>
+            <p class="dashboard-kicker">Welcome to</p>
+            <h1 class="page-title">ABB Workforce360</h1>
+            <p class="page-subtitle">Manage workforce, gate entry, visitors and canteen in one place.</p>
+          </div>
+          <div class="dashboard-welcome-actions">
+            <img src="{% static 'webapp/abb-logo.svg' %}" alt="ABB" class="dashboard-abb-logo">
+            <button class="btn btn-secondary" data-refresh="dashboard">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+            Refresh
+            </button>
+          </div>
+        </div>
+        <div class="stats-row stats-3 dashboard-worker-stats">
+          <div class="stat-card dashboard-stat dashboard-stat-blue">
+            <span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 11a4 4 0 1 0-3.46-6A5.5 5.5 0 0 1 14 9a5.5 5.5 0 0 1-.62 2.53c.77-.34 1.65-.53 2.62-.53ZM8.5 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2C4.91 14 2 15.79 2 18v2h13v-2c0-2.21-2.91-4-6.5-4Zm8.3-.92c-.67-.05-1.37.02-2.04.18C16.13 14.35 17 15.6 17 17v3h5v-2c0-2.46-2.31-4.65-5.2-4.92Z"/></svg></span>
+            <span class="stat-label">Total Workers</span><span class="stat-value" id="dash-total">—</span>
+          </div>
+          <div class="stat-card dashboard-stat dashboard-stat-green">
+            <span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 5h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-6"/><path d="m10 17 5-5-5-5M15 12H3"/></svg></span>
+            <span class="stat-label">Active Workers</span><span class="stat-value green" id="dash-active">—</span>
+          </div>
+          <div class="stat-card dashboard-stat dashboard-stat-rose">
+            <span class="dashboard-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M5 21v-2a7 7 0 0 1 14 0v2M18 8h4M20 6v4"/></svg></span>
+            <span class="stat-label">Inactive Workers</span><span class="stat-value" id="dash-inactive">—</span>
+          </div>
+        </div>
+        <div class="card dashboard-activity">
+          <div class="pad">
+            <div class="dashboard-section-heading"><div><h2>Daily Activity</h2><span>Today at ABB Plant 3</span></div></div>
+            <div class="stats-row stats-4" id="daily-summary">
+              <div class="stat-card"><span class="stat-label">Loading…</span><span class="stat-value">—</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card dashboard-recent-activity">
+          <div class="dashboard-recent-heading">
+            <h2>Recent Activity</h2>
+            <button class="btn btn-ghost btn-sm" data-page="gate-history">View gate transactions <span aria-hidden="true">→</span></button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Type</th><th>Activity</th><th>Name</th><th>ID / Pass No.</th><th>Status</th></tr></thead>
+              <tbody id="dashboard-recent-rows"><tr><td colspan="6" class="dashboard-recent-empty">Loading recent activity…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== WORKER MANAGEMENT =========== -->
+      <section class="page" id="page-workers" hidden>
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="eyebrow">ABB Plant 3 · Workforce Records</div>
+            <h1 class="page-title">Worker Management</h1>
+            <p class="page-subtitle">Search worker records, update status and issue identity cards.</p>
+          </div>
+          <button class="btn btn-primary" id="toggle-worker-register">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M8 9a3 3 0 100-6 3 3 0 000 6zm0 2a6 6 0 016 6H2a6 6 0 016-6zm8-4a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0V10h1a1 1 0 100-2h-1V7z"/></svg>
+            Register Worker
+          </button>
+        </div>
+        <div class="stats-row stats-3">
+          <div class="stat-card"><span class="stat-label">Total Workers</span><span class="stat-value" id="worker-total">—</span></div>
+          <div class="stat-card"><span class="stat-label">Active</span><span class="stat-value green" id="worker-active">—</span></div>
+          <div class="stat-card"><span class="stat-label">Inactive</span><span class="stat-value" id="worker-inactive">—</span></div>
+        </div>
+
+      <!-- =========== WORKER REGISTRATION (inline collapsible) =========== -->
+      <div class="panel registration-panel" id="worker-register-panel" hidden style="max-width:920px;margin-bottom:24px">
+        <div class="registration-panel-header" id="worker-register-close">
+          <h2 class="form-section-title">Register New Worker</h2>
+          <button class="btn btn-ghost btn-sm" type="button">✕ Close</button>
+        </div>
+        <form id="worker-form" enctype="multipart/form-data">
+          <div class="form-section">
+            <p class="form-section-desc">Enter the worker's personal and employment information. All text fields are auto-capitalized.</p>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label" for="wf-name">Full name <em>*</em></label>
+                <input class="form-input input-upper" id="wf-name" name="name" required maxlength="120" placeholder="Enter full name">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wf-contractor">Contractor <em>*</em></label>
+                <input class="form-input input-upper" id="wf-contractor" name="contractor_name" required maxlength="120" placeholder="Contractor company">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wf-joining">Joining date <em>*</em></label>
+                <input class="form-input" id="wf-joining" type="date" name="joining_date" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wf-contact">Contact number <em>*</em></label>
+                <input class="form-input" id="wf-contact" name="contact_no" type="tel" required placeholder="10–15 digits">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wf-emergency">Emergency contact <em>*</em></label>
+                <input class="form-input" id="wf-emergency" name="emergency_contact" type="tel" required placeholder="10–15 digits">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="wf-aadhaar">Aadhaar number <em>*</em></label>
+                <input class="form-input" id="wf-aadhaar" name="aadhaar_no" inputmode="numeric" maxlength="14" required placeholder="12-digit Aadhaar">
+                <span class="form-hint">Encrypted at rest; only the last 4 digits are shown in records.</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-section">
+            <h2 class="form-section-title">Worker Photo</h2>
+            <p class="form-section-desc">JPG/JPEG, up to 200 KB. Camera capture is available on supported devices.</p>
+            <div class="upload-row">
+              <input name="photo" type="file" accept="image/jpeg" required id="wf-photo">
+              <button type="button" class="btn btn-secondary" id="wf-upload-btn">Choose Photo</button>
+              <button type="button" class="btn btn-secondary" data-camera="worker-form">
+                <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+                Take photo
+              </button>
+              <img class="photo-preview" id="wf-photo-preview" alt="Preview" style="display:none">
+              <span id="wf-photo-label">Photo required</span>
+            </div>
+          </div>
+          <div class="form-footer">
+            <span class="form-footer-hint">Worker ID is generated from the existing secure identifier rule.</span>
+            <button class="btn btn-primary" type="submit">Register Worker</button>
+          </div>
+        </form>
+      </div>
+
+        <div class="panel">
+          <div class="table-filters">
+            <div class="filter-group">
+              <div class="search-box">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                <input id="worker-search" placeholder="Search by worker name…" type="search">
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-sm" data-refresh="workers">
+              <svg viewBox="0 0 20 20" fill="currentColor" width="14" height="14"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+              Refresh
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Photo</th><th>Worker ID</th><th>Worker No.</th><th>Name</th>
+                  <th>Contractor</th><th>Joining Date</th><th>Contact</th>
+                  <th>Emergency</th><th>Aadhaar</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="worker-rows"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="worker-page"></div>
+        </div>
+      </section>
+
+      <section class="page" id="page-gate" hidden>
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="eyebrow">ABB Plant 3 · Gate Management</div>
+            <h1 class="page-title">Gate Entry &amp; Exit</h1>
+            <p class="page-subtitle">Scan or enter a worker or visitor identity code.</p>
+          </div>
+        </div>
+        <div class="scanner-grid">
+          <div>
+            <form class="scan-panel" id="gate-form">
+              <div class="scan-input-row">
+                <div class="scan-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8v8M12 8v8M17 8v8"/></svg>
+                </div>
+                <input class="scan-input" name="barcode" required maxlength="120" autocomplete="off" autofocus placeholder="Scan barcode or type ID…">
+                <button class="btn btn-primary scan-btn" type="submit">Process Scan</button>
+              </div>
+              <p class="scan-hint">USB barcode scanners that send keystrokes and Enter are supported. IDs are case-insensitive.</p>
+            </form>
+            <div id="gate-result" class="result-card" aria-live="polite" style="display:none"></div>
+          </div>
+          <div class="card feed-panel">
+            <div class="feed-header">
+              <h3><span class="pulse-dot"></span> Today's Activity</h3>
+              <button class="btn btn-secondary btn-xs" data-refresh="gate-history">Refresh</button>
+            </div>
+            <div class="feed-list" id="gate-recent"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== VISITOR MANAGEMENT =========== -->
+      <section class="page" id="page-visitors" hidden>
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="eyebrow">ABB Plant 3 · Visitor Management</div>
+            <h1 class="page-title">Visitor Management</h1>
+            <p class="page-subtitle">Issue temporary daily visitor credentials and manage guest records.</p>
+          </div>
+          <button class="btn btn-primary" id="toggle-visitor-register">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path d="M8 9a3 3 0 100-6 3 3 0 000 6zm0 2a6 6 0 016 6H2a6 6 0 016-6zm8-4a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0V10h1a1 1 0 100-2h-1V7z"/></svg>
+            Register Visitor
+          </button>
+        </div>
+        <div class="stats-row stats-3" id="visitor-counts"></div>
+
+        <!-- Visitor Registration Panel (inline collapsible) -->
+        <div class="panel registration-panel" id="visitor-register-panel" hidden style="max-width:920px;margin-bottom:24px">
+          <div class="registration-panel-header" id="visitor-register-close">
+            <h2 class="form-section-title">Register New Visitor</h2>
+            <button class="btn btn-ghost btn-sm" type="button">✕ Close</button>
+          </div>
+          <form id="visitor-form" enctype="multipart/form-data">
+            <div class="form-section">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label" for="vf-name">Full name <em>*</em></label>
+                  <input class="form-input input-upper" id="vf-name" name="name" required maxlength="120" placeholder="Visitor's full name">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="vf-company">Company <em>*</em></label>
+                  <input class="form-input input-upper" id="vf-company" name="company_name" required maxlength="120" placeholder="Company name">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="vf-location">Location / City <em>*</em></label>
+                  <input class="form-input input-upper" id="vf-location" name="location" required maxlength="120" placeholder="City or location">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="vf-host">ABB Host <em>*</em></label>
+                  <input class="form-input input-upper" id="vf-host" name="host" required maxlength="120" placeholder="Host employee name">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="vf-purpose">Purpose <em>*</em></label>
+                  <input class="form-input input-upper" id="vf-purpose" name="purpose" required maxlength="255" placeholder="Visit purpose">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="vf-contact">Contact number <em>*</em></label>
+                  <input class="form-input" id="vf-contact" name="contact_no" type="tel" required placeholder="10–15 digits">
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="vf-aadhaar">Aadhaar number <em>*</em></label>
+                  <input class="form-input" id="vf-aadhaar" name="aadhaar_no" inputmode="numeric" maxlength="14" required placeholder="12-digit Aadhaar">
+                  <span class="form-hint">Encrypted in the existing database.</span>
+                </div>
+              </div>
+            </div>
+            <div class="form-section">
+              <h2 class="form-section-title">Visitor Photo (Optional)</h2>
+              <div class="upload-row">
+                <input name="photo" type="file" accept="image/jpeg" id="vf-photo">
+                <button type="button" class="btn btn-secondary" id="vf-upload-btn">Choose Photo</button>
+                <button type="button" class="btn btn-secondary" data-camera="visitor-form">
+                  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4 5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V7a2 2 0 00-2-2h-1.586a1 1 0 01-.707-.293l-1.121-1.121A2 2 0 0011.172 3H8.828a2 2 0 00-1.414.586L6.293 4.707A1 1 0 015.586 5H4zm6 9a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg>
+                  Take photo
+                </button>
+                <img class="photo-preview" id="vf-photo-preview" alt="Preview" style="display:none">
+                <span>Optional JPG/JPEG, up to 200 KB</span>
+              </div>
+            </div>
+            <div class="form-footer">
+              <span class="form-footer-hint">Pass automatically expires at 23:59:59 on registration date.</span>
+              <button class="btn btn-primary" type="submit">Issue Visitor Pass</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <div class="table-filters">
+            <div class="filter-group">
+              <div class="search-box">
+                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                <input id="visitor-search" placeholder="Search visitor name…" type="search">
+              </div>
+              <select class="filter-input" id="visitor-status">
+                <option value="">All statuses</option>
+                <option>Active</option>
+                <option>Inactive</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary btn-sm" data-refresh="visitors">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Photo</th><th>Visitor ID</th><th>Pass No.</th><th>Name</th>
+                  <th>Company</th><th>Location</th><th>Host</th><th>Purpose</th>
+                  <th>Contact</th><th>Aadhaar</th><th>Expires</th><th>Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="visitor-rows"></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="visitor-page"></div>
+        </div>
+      </section>
+
+      <!-- =========== GATE TRANSACTIONS =========== -->
+      <section class="page" id="page-gate-history" hidden>
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="eyebrow">ABB Plant 3 · Gate Audit</div>
+            <h1 class="page-title">Gate Transactions</h1>
+            <p class="page-subtitle">Accepted and rejected gate operations.</p>
+          </div>
+          <button class="btn btn-secondary" data-refresh="gate-history">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+            Refresh
+          </button>
+        </div>
+        <div class="panel">
+          <div class="table-filters">
+            <div class="filter-group">
+              <input type="date" class="filter-input" id="gate-date">
+              <select class="filter-input" id="gate-result-filter">
+                <option value="">All results</option>
+                <option value="ACCEPTED">Accepted</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </div>
+          <div class="stats-row stats-3 gate-history-counts" id="gate-history-counts"></div>
+          <div class="table-wrap">
+            <table class="gate-history-table" aria-label="Gate transactions">
+              <colgroup>
+                <col class="gate-col-photo"><col class="gate-col-name"><col class="gate-col-time">
+                <col class="gate-col-person"><col class="gate-col-type"><col class="gate-col-event">
+                <col class="gate-col-result"><col class="gate-col-reason">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Photo</th><th>Name</th><th>Time</th><th>Person ID</th><th>Type</th><th>Event</th>
+                  <th>Result</th><th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="gate-history-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== CANTEEN SCANNER =========== -->
+      <section class="page" id="page-canteen" hidden>
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="eyebrow">ABB Plant 3 · Canteen</div>
+            <h1 class="page-title">Canteen Meal Scanner</h1>
+            <p class="page-subtitle">Eligible workers and visitors with an accepted gate entry may scan once per business day.</p>
+          </div>
+        </div>
+        <div class="scanner-grid">
+          <div>
+            <form class="scan-panel canteen-panel" id="canteen-form">
+              <div class="scan-input-row">
+                <div class="scan-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 8v8M12 8v8M15 8v8"/></svg>
+                </div>
+                <input class="scan-input" name="barcode" required maxlength="120" autocomplete="off" placeholder="Scan barcode or type ID…">
+                <button class="btn btn-primary scan-btn" type="submit" style="background:var(--info)">Process Meal Scan</button>
+              </div>
+              <p class="scan-hint">One meal scan per person per business day. Gate entry required.</p>
+            </form>
+            <div id="canteen-result" class="result-card" aria-live="polite" style="display:none"></div>
+          </div>
+          <div class="card feed-panel">
+            <div class="feed-header">
+              <h3><span class="pulse-dot"></span> Today's Scans</h3>
+              <button class="btn btn-secondary btn-xs" data-refresh="canteen-history">Refresh</button>
+            </div>
+            <div class="feed-list" id="canteen-recent"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =========== CANTEEN REPORTS =========== -->
+      <section class="page" id="page-canteen-history" hidden>
+        <div class="page-header">
+          <div class="page-header-text">
+            <div class="eyebrow">ABB Plant 3 · Canteen Reports</div>
+            <h1 class="page-title">Canteen Transactions</h1>
+            <p class="page-subtitle">Daily scan totals and eligibility audit.</p>
+          </div>
+          <button class="btn btn-secondary" data-refresh="canteen-history">
+            <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/></svg>
+            Refresh
+          </button>
+        </div>
+        <div class="panel">
+          <div class="table-filters">
+            <div class="filter-group">
+              <input type="date" class="filter-input" id="canteen-date">
+              <select class="filter-input" id="canteen-result-filter">
+                <option value="">All results</option>
+                <option value="ACCEPTED">Accepted</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </div>
+          </div>
+          <div class="stats-row stats-3" id="canteen-counts" style="padding:14px 16px 0;margin-bottom:0"></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Photo</th><th>Name</th><th>Time</th><th>Person ID</th><th>Type</th>
+                  <th>Gate Entry</th><th>Result</th><th>Reason</th>
+                </tr>
+              </thead>
+              <tbody id="canteen-history-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /content -->
+
+    <footer class="footer" style="padding:0 32px 20px">
+      ABB Workforce360 <span>·</span> Plant 3 Operations &amp; Services
+    </footer>
+  </div><!-- /main-wrap -->
+
+</div><!-- /shell -->
+
+<script src="{% static 'webapp/app.js' %}" defer></script>
+</body>
+</html>
