@@ -1,0 +1,27 @@
+# Python environments and generated artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pytest-work/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local configuration and application data
+.env
+.env.*
+!.env.example
+data/
+uploads/
+tmp/
+
+# Generated records and logs
+*.db
+*.sqlite*
+*.pdf
+*.log
