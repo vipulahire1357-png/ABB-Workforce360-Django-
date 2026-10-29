@@ -326,6 +326,7 @@ img { display: block; max-width: 100%; }
 .stats-row { display: grid; gap: 14px; margin-bottom: 20px; }
 .stats-3 { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
 .stats-4 { grid-template-columns: repeat(4, minmax(130px, 1fr)); }
+.stats-5 { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
 .stat-card {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px 20px;
@@ -783,6 +784,15 @@ tr:hover td { background: var(--surface-hover); }
 .confirm-dialog h3 { font-size: 16px; font-weight: 700; margin: 0 0 8px; color: var(--text-1); }
 .confirm-dialog p { font-size: 13px; color: var(--text-2); margin: 0 0 20px; line-height: 1.5; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.people-details-overlay { z-index: 80; }
+.people-details-dialog { width: min(900px, calc(100vw - 32px)); max-height: 85vh; overflow: hidden; }
+.people-details-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.people-details-heading h3 { margin: 0; }
+.people-details-table-wrap { max-height: 65vh; overflow: auto; margin-top: 12px; }
+.people-details-table-wrap table { width: 100%; border-collapse: collapse; }
+.people-details-table-wrap th, .people-details-table-wrap td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: 12px; }
+.people-details-table-wrap th { position: sticky; top: 0; background: var(--surface-hover); color: var(--text-2); }
+.people-details-photo { width: 36px; height: 42px; object-fit: cover; border-radius: var(--radius-xs); }
 .btn-danger { background: var(--error); color: white; }
 .btn-danger:hover { background: #B91C1C; }
 
@@ -827,11 +837,11 @@ tr:hover td { background: var(--surface-hover); }
   .content { padding: 20px 16px; }
   .top-header { padding: 0 16px; }
   .form-grid { grid-template-columns: 1fr; }
-  .stats-3, .stats-4 { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+  .stats-3, .stats-4, .stats-5 { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
   .page-header { flex-direction: column; }
 }
 @media (max-width: 600px) {
-  .stats-3, .stats-4 { grid-template-columns: 1fr; }
+  .stats-3, .stats-4, .stats-5 { grid-template-columns: 1fr; }
   .table-filters { flex-direction: column; align-items: stretch; }
   .search-box { width: 100%; }
 }

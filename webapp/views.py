@@ -379,10 +379,37 @@ def gate_history(request):
             stmt = stmt.where(GateTransaction.event_date == date.fromisoformat(request.GET["event_date"]))
         if request.GET.get("person_type"):
             stmt = stmt.where(GateTransaction.person_type == request.GET["person_type"].upper())
+        if request.GET.get("event_type"):
+            stmt = stmt.where(GateTransaction.event_type == request.GET["event_type"].upper())
         if request.GET.get("person_id"):
             stmt = stmt.where(GateTransaction.person_id == request.GET["person_id"])
         if request.GET.get("result"):
             stmt = stmt.where(GateTransaction.validation_result == request.GET["result"].upper())
+        presence = request.GET.get("presence", "").upper()
+        if presence:
+            presence_types = {"WORKERS_INSIDE": "WORKER", "VISITORS_INSIDE": "VISITOR"}
+            if presence not in presence_types:
+                return api_error("Invalid presence filter", 422)
+            latest_presence = select(
+                GateTransaction.id.label("transaction_id"),
+                GateTransaction.person_type.label("person_type"),
+                GateTransaction.person_id.label("person_id"),
+                GateTransaction.event_type.label("event_type"),
+                func.row_number().over(
+                    partition_by=(GateTransaction.person_type, GateTransaction.person_id),
+                    order_by=(GateTransaction.scan_timestamp.desc(), GateTransaction.id.desc()),
+                ).label("position"),
+            ).where(
+                GateTransaction.person_type.in_(("WORKER", "VISITOR")),
+                GateTransaction.validation_result == "ACCEPTED",
+                GateTransaction.event_type.in_(("ENTRY", "EXIT")),
+            ).subquery()
+            inside_entries = select(latest_presence.c.transaction_id).where(
+                latest_presence.c.position == 1,
+                latest_presence.c.event_type == "ENTRY",
+                latest_presence.c.person_type == presence_types[presence],
+            )
+            stmt = stmt.where(GateTransaction.id.in_(inside_entries))
         total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = db.scalars(stmt.order_by(GateTransaction.scan_timestamp.desc()).offset((page - 1) * size).limit(size)).all()
         pmap = _resolve_person_details(db, rows, "person_id")
@@ -402,25 +429,32 @@ def gate_report(request):
         target = date.fromisoformat(request.GET["report_date"]) if request.GET.get("report_date") else today_local()
         rows = list(db.scalars(select(GateTransaction).where(GateTransaction.event_date == target).order_by(GateTransaction.scan_timestamp.asc())))
         accepted = [row for row in rows if row.validation_result == "ACCEPTED"]
-        latest_worker_events = {}
-        worker_events = db.execute(
-            select(GateTransaction.person_id, GateTransaction.event_type)
+        latest_people_events = {}
+        person_events = db.scalars(
+            select(GateTransaction)
             .where(
-                GateTransaction.person_type == "WORKER",
+                GateTransaction.person_type.in_(("WORKER", "VISITOR")),
                 GateTransaction.validation_result == "ACCEPTED",
                 GateTransaction.event_type.in_(("ENTRY", "EXIT")),
             )
             .order_by(GateTransaction.scan_timestamp.desc(), GateTransaction.id.desc())
         )
-        for person_id, event_type in worker_events:
-            latest_worker_events.setdefault(person_id, event_type)
+        for event in person_events:
+            latest_people_events.setdefault((event.person_type, event.person_id), event)
+        inside_rows = [event for event in latest_people_events.values() if event.event_type == "ENTRY"]
+        inside_details = _resolve_person_details(db, inside_rows)
+        inside_people = [serialize_gate(event, *inside_details.get(event.person_id, (None, None))) for event in inside_rows]
+        transaction_details = _resolve_person_details(db, rows)
         return JsonResponse({"date": target.isoformat(), "total_transactions": len(rows),
             "accepted_entries": sum(row.event_type == "ENTRY" for row in accepted),
             "accepted_exits": sum(row.event_type == "EXIT" for row in accepted),
-            "estimated_workers_inside": sum(event_type == "ENTRY" for event_type in latest_worker_events.values()),
+            "estimated_workers_inside": sum(event.person_type == "WORKER" for event in inside_rows),
+            "estimated_visitors_inside": sum(event.person_type == "VISITOR" for event in inside_rows),
+            "workers_inside": [person for person in inside_people if person["person_type"] == "WORKER"],
+            "visitors_inside": [person for person in inside_people if person["person_type"] == "VISITOR"],
             "rejected": sum(row.validation_result == "REJECTED" for row in rows),
             "unique_persons": len({row.person_id for row in accepted}),
-            "transactions": [serialize_gate(row) for row in rows]})
+            "transactions": [serialize_gate(row, *transaction_details.get(row.person_id, (None, None))) for row in rows]})
     except ValueError:
         return api_error("Invalid report date", 422)
     finally:
@@ -556,6 +590,8 @@ def canteen_history(request):
             stmt = stmt.where(CanteenTransaction.worker_id == person_id.strip().upper())
         if request.GET.get("result"):
             stmt = stmt.where(CanteenTransaction.scan_result == request.GET["result"].upper())
+        if request.GET.get("person_type"):
+            stmt = stmt.where(CanteenTransaction.person_type == request.GET["person_type"].upper())
         total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         rows = db.scalars(stmt.order_by(CanteenTransaction.scan_timestamp.desc()).offset((page - 1) * size).limit(size)).all()
         pmap = _resolve_person_details(db, rows, "worker_id")
@@ -576,12 +612,13 @@ def canteen_report(request):
         rows = list(db.scalars(select(CanteenTransaction).where(CanteenTransaction.business_date == target).order_by(CanteenTransaction.scan_timestamp.asc())))
         accepted = [r for r in rows if r.scan_result == "ACCEPTED"]
         rejected = [r for r in rows if r.scan_result == "REJECTED"]
+        person_details = _resolve_person_details(db, rows, "worker_id")
         return JsonResponse({"date": target.isoformat(), "total_scans": len(rows), "successful_scans": len(accepted),
             "unique_people": len({r.worker_id for r in accepted}), "unique_workers": len({r.worker_id for r in accepted if r.person_type == "WORKER"}),
             "unique_visitors": len({r.worker_id for r in accepted if r.person_type == "VISITOR"}), "rejected_scans": len(rejected),
             "duplicate_attempts": sum(r.rejection_reason == "ALREADY_SCANNED" for r in rejected),
             "no_gate_entry": sum(r.rejection_reason == "NO_GATE_ENTRY" for r in rejected),
-            "transactions": [serialize_canteen(r) for r in rows]})
+            "transactions": [serialize_canteen(r, *person_details.get(r.worker_id, (None, None))) for r in rows]})
     except ValueError:
         return api_error("Invalid report date", 422)
     finally:

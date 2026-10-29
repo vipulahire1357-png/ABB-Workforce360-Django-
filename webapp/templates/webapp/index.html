@@ -7,7 +7,7 @@
   <title>ABB Workforce360</title>
   <meta name="description" content="ABB Workforce360 Plant 3 workforce management, gate operations, and canteen services.">
   <link rel="icon" href="{% static 'webapp/abb-logo.svg' %}" type="image/svg+xml">
-  <link rel="stylesheet" href="{% static 'webapp/app.css' %}">
+  <link rel="stylesheet" href="{% static 'webapp/app.css' %}?v=20261029-3">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('wf-theme')||''}catch(e){}</script>
 </head>
 <body>
@@ -144,7 +144,7 @@
         <div class="card dashboard-activity">
           <div class="pad">
             <div class="dashboard-section-heading"><div><h2>Daily Activity</h2><span>Today at ABB Plant 3</span></div></div>
-            <div class="stats-row stats-4" id="daily-summary">
+            <div class="stats-row stats-5" id="daily-summary">
               <div class="stat-card"><span class="stat-label">Loading…</span><span class="stat-value">—</span></div>
             </div>
           </div>
@@ -429,9 +429,25 @@
                 <option value="ACCEPTED">Accepted</option>
                 <option value="REJECTED">Rejected</option>
               </select>
+              <select class="filter-input" id="gate-event-filter" aria-label="Filter gate event">
+                <option value="">All events</option>
+                <option value="ENTRY">Entry</option>
+                <option value="EXIT">Exit</option>
+              </select>
+              <select class="filter-input" id="gate-type-filter" aria-label="Filter person type">
+                <option value="">All types</option>
+                <option value="WORKER">Worker</option>
+                <option value="VISITOR">Visitor</option>
+                <option value="UNKNOWN">Unknown</option>
+              </select>
+              <select class="filter-input" id="gate-presence-filter" aria-label="Filter people currently inside">
+                <option value="">Inside filter</option>
+                <option value="WORKERS_INSIDE">Workers Inside</option>
+                <option value="VISITORS_INSIDE">Visitors Inside</option>
+              </select>
             </div>
           </div>
-          <div class="stats-row stats-3 gate-history-counts" id="gate-history-counts"></div>
+          <div class="stats-row stats-4 gate-history-counts" id="gate-history-counts"></div>
           <div class="table-wrap">
             <table class="gate-history-table" aria-label="Gate transactions">
               <colgroup>
@@ -506,9 +522,15 @@
                 <option value="ACCEPTED">Accepted</option>
                 <option value="REJECTED">Rejected</option>
               </select>
+              <select class="filter-input" id="canteen-type-filter" aria-label="Filter person type">
+                <option value="">All types</option>
+                <option value="WORKER">Worker</option>
+                <option value="VISITOR">Visitor</option>
+                <option value="UNKNOWN">Unknown</option>
+              </select>
             </div>
           </div>
-          <div class="stats-row stats-3" id="canteen-counts" style="padding:14px 16px 0;margin-bottom:0"></div>
+          <div class="stats-row stats-4" id="canteen-counts" style="padding:14px 16px 0;margin-bottom:0"></div>
           <div class="table-wrap">
             <table>
               <thead>
@@ -532,6 +554,6 @@
 
 </div><!-- /shell -->
 
-<script src="{% static 'webapp/app.js' %}" defer></script>
+<script src="{% static 'webapp/app.js' %}?v=20261029-6" defer></script>
 </body>
 </html>

@@ -180,6 +180,60 @@
     return d;
   }
 
+  function openPeopleDetails(title, rows) {
+    const overlay = document.createElement("div");
+    overlay.className = "confirm-overlay people-details-overlay";
+    const dialog = document.createElement("div");
+    dialog.className = "confirm-dialog people-details-dialog";
+    const heading = document.createElement("div"); heading.className = "people-details-heading";
+    const h = document.createElement("h3"); h.textContent = title;
+    const close = mkButton("✕", "btn btn-secondary btn-xs", () => overlay.remove()); close.setAttribute("aria-label", "Close details");
+    heading.append(h, close);
+    const meta = document.createElement("p"); meta.textContent = `${rows.length} ${rows.length === 1 ? "record" : "records"}`;
+    const wrap = document.createElement("div"); wrap.className = "people-details-table-wrap";
+    const table = document.createElement("table");
+    const thead = document.createElement("thead"), headerRow = document.createElement("tr");
+    ["Photo", "Name", "Person ID", "Type", "Event", "Time"].forEach(label => { const th = document.createElement("th"); th.textContent = label; headerRow.append(th); });
+    thead.append(headerRow); table.append(thead);
+    const body = document.createElement("tbody");
+    rows.forEach(person => {
+      const tr = document.createElement("tr");
+      const photoCell = document.createElement("td");
+      if (person.photo_url) {
+        const img = document.createElement("img"); img.className = "people-details-photo";
+        img.src = person.photo_url; img.alt = person.name ? `${person.name} photo` : "Person photo"; img.loading = "lazy";
+        photoCell.append(img);
+      } else photoCell.textContent = "—";
+      tr.append(photoCell);
+      cell(tr, person.name || "—", "cell-strong"); cell(tr, person.person_id || person.worker_id || "—", "cell-mono");
+      cell(tr, ({ WORKER: "Worker", VISITOR: "Visitor", UNKNOWN: "Unknown" })[person.person_type] || "Unknown");
+      cell(tr, person.event_type || (person.scan_result === "ACCEPTED" ? "Meal" : "—"));
+      cell(tr, fmt(person.scan_timestamp)); body.append(tr);
+    });
+    if (!rows.length) { const tr = document.createElement("tr"), td = document.createElement("td"); td.colSpan = 6; td.textContent = "No people match this card."; td.className = "empty-state"; tr.append(td); body.append(tr); }
+    table.append(body); wrap.append(table); dialog.append(heading, meta, wrap); overlay.append(dialog); document.body.append(overlay);
+    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+    overlay.addEventListener("keydown", e => { if (e.key === "Escape") overlay.remove(); });
+    close.focus();
+  }
+
+  function makePeopleStatCard(label, value, colorClass, rows) {
+    const card = makeStatCard(label, value, colorClass);
+    card.classList.add("stat-card-clickable"); card.tabIndex = 0; card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `${label}: ${value}. Show details`);
+    const open = () => openPeopleDetails(label, rows);
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } });
+    return card;
+  }
+
+  async function loadAllWorkers() {
+    const first = await api("/api/workers?page=1&page_size=100");
+    const pages = await Promise.all(Array.from({ length: Math.ceil(first.total / 100) - 1 }, (_, i) =>
+      api(`/api/workers?page=${i + 2}&page_size=100`)));
+    return [first, ...pages].flatMap(page => page.items);
+  }
+
   /* ---- Login ---- */
   const loginForm = $("#login-form");
   if (loginForm && !$(".shell")) {
@@ -551,8 +605,12 @@
   $("#visitor-status")?.addEventListener("change", () => { visitorPage = 1; loadVisitors(); });
   $("#gate-date")?.addEventListener("change", loadGateHistory);
   $("#gate-result-filter")?.addEventListener("change", loadGateHistory);
+  $("#gate-event-filter")?.addEventListener("change", loadGateHistory);
+  $("#gate-type-filter")?.addEventListener("change", loadGateHistory);
+  $("#gate-presence-filter")?.addEventListener("change", loadGateHistory);
   $("#canteen-date")?.addEventListener("change", loadCanteenHistory);
   $("#canteen-result-filter")?.addEventListener("change", loadCanteenHistory);
+  $("#canteen-type-filter")?.addEventListener("change", loadCanteenHistory);
 
   /* ---- Pagination builder ---- */
   function renderPagination(target, page, total, size, change) {
@@ -617,10 +675,11 @@
       $("#dash-inactive").textContent = summary.inactive;
       const container = $("#daily-summary");
       container.replaceChildren(
-        makeStatCard("Gate Entries", gate.accepted_entries, "green"),
-        makeStatCard("Gate Exits", gate.accepted_exits, "blue"),
-        makeStatCard("Meal Scans", meals.successful_scans, "orange"),
-        makeStatCard("Estimated Workers Inside", gate.estimated_workers_inside, "red"),
+        makePeopleStatCard("Gate Entries", gate.accepted_entries, "green", gate.transactions.filter(row => row.validation_result === "ACCEPTED" && row.event_type === "ENTRY")),
+        makePeopleStatCard("Gate Exits", gate.accepted_exits, "blue", gate.transactions.filter(row => row.validation_result === "ACCEPTED" && row.event_type === "EXIT")),
+        makePeopleStatCard("Meal Scans", meals.successful_scans, "orange", meals.transactions.filter(row => row.scan_result === "ACCEPTED")),
+        makePeopleStatCard("Estimated Workers Inside", gate.estimated_workers_inside, "red", gate.workers_inside),
+        makePeopleStatCard("Estimated Visitors Inside", gate.estimated_visitors_inside, "blue", gate.visitors_inside),
       );
       renderDashboardRecentActivity(gateRecent.items, canteenRecent.items);
     } catch (e) { notice(e.message, true); }
@@ -735,8 +794,13 @@
     try {
       const q = new URLSearchParams({ page: "1", page_size: "100" });
       const d = $("#gate-date")?.value, r = $("#gate-result-filter")?.value;
+      const eventType = $("#gate-event-filter")?.value, personType = $("#gate-type-filter")?.value;
+      const presence = $("#gate-presence-filter")?.value;
       if (d) q.set("event_date", d);
       if (r) q.set("result", r);
+      if (eventType) q.set("event_type", eventType);
+      if (personType) q.set("person_type", personType);
+      if (presence) q.set("presence", presence);
       const reportQuery = new URLSearchParams();
       if (d) reportQuery.set("report_date", d);
       const [data, report] = await Promise.all([
@@ -749,6 +813,7 @@
         makeStatCard("Entries", report.accepted_entries, "green"),
         makeStatCard("Exits", report.accepted_exits, "blue"),
         makeStatCard("Estimated Workers Inside", report.estimated_workers_inside, "red"),
+        makeStatCard("Estimated Visitors Inside", report.estimated_visitors_inside, "blue"),
       );
     } catch (e) { notice(e.message, true); }
   }
@@ -982,8 +1047,10 @@
       const q = new URLSearchParams({ page: "1", page_size: "100" });
       const dateVal = $("#canteen-date")?.value;
       const resultVal = $("#canteen-result-filter")?.value;
+      const personType = $("#canteen-type-filter")?.value;
       if (dateVal) q.set("business_date", dateVal);
       if (resultVal) q.set("result", resultVal);
+      if (personType) q.set("person_type", personType);
       const data = await api(`/api/canteen/transactions?${q}`);
       renderCanteenTableRows("#canteen-history-rows", data.items);
       const day = await api(`/api/canteen/report${dateVal ? `?report_date=${encodeURIComponent(dateVal)}` : ""}`);
@@ -992,7 +1059,8 @@
         counts.replaceChildren(
           makeStatCard("Successful Meals", day.successful_scans, "green"),
           makeStatCard("Rejected Scans", day.rejected_scans, "red"),
-          makeStatCard("Unique People", day.unique_people, "blue"),
+          makeStatCard("Workers Had Meals", day.unique_workers, "blue"),
+          makeStatCard("Visitors Had Meals", day.unique_visitors, "orange"),
         );
       }
     } catch (e) { notice(e.message, true); }
